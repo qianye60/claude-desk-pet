@@ -154,6 +154,8 @@ config.json 用记事本改也行（带不带 BOM 都能读）。改完重启生
 | [Pillow](https://python-pillow.org/) / [NumPy](https://numpy.org/) | HPND / BSD | 图像处理（NumPy 只在生成立绘的工具里用） |
 | 网络热梗与段子 | — | `lines.py` 里的热梗、Claude 自嘲和封号段子，来自公开网页文章和社区里的常见说法，可能不是最新的 |
 
+**许可**：本项目的代码以 [MIT](LICENSE) 许可发布；仅覆盖代码，立绘和其他借用内容按上表各自的许可。
+
 `skins/pixel/` 的像素图是 `make_pixel_skin.py` 画的；你自己放进 `skins/` 的图片版权归你，用别人的图请先取得作者同意。
 
 ## 打包（可选）
