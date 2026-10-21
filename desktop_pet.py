@@ -59,6 +59,7 @@ DEFAULT_CONFIG = {
     "snoop_enabled": True,           # 允许“翻翻我的文件夹”（只看文件名，第一次会让你确认）
     "snoop_consent": False,          # 你确认过之后会自动变成 true
     "snoop_folders": [],             # 留空 = 桌面、文档、视频
+    "sizes": {},                     # 每个形态各自的大小倍数（右键菜单的“大小”滑块 / Ctrl+滚轮，自动记住）
 }
 
 cw = None
@@ -215,6 +216,8 @@ class Pet(QWidget):
         self.setFixedSize(int(self.BUBBLE_W + self.char_w + 2 * self.PAD_X),
                           int(self.TOP_PAD + self.char_h + self.BOT_PAD))
         self.cur_state, self.cur_idx = "sit", 0
+        self._size_target = form.scale
+        self.disp_k = 1.0                 # 显示倍率：调大小时先拉伸现有图（立刻有反应），随后用原图重新缩放
         self.paint_key = None
         self.cfg["form"] = form.id
         if hasattr(self, "ai"):
@@ -222,14 +225,67 @@ class Pet(QWidget):
         if keep_pos and self.ax:
             self.move_anchor(self.ax, self.ay)
 
+    def set_size(self, scale):
+        """调整当前形态的大小（0.5~2 倍）：先立刻拉伸现有图，停手 0.6 秒后用原图重新缩放，保证清晰"""
+        scale = max(0.5, min(2.0, float(scale)))
+        cur = getattr(self, "_size_target", self.form.scale)
+        if abs(scale - cur) < 1e-3:
+            return
+        self._size_target = scale
+        r = scale / max(1e-6, self.form.scale * self.disp_k)
+        self.disp_k *= r
+        self.char_w *= r
+        self.char_h *= r
+        self.edge_y *= r
+        self.head_y *= r
+        self.setFixedSize(int(self.BUBBLE_W + self.char_w + 2 * self.PAD_X),
+                          int(self.TOP_PAD + self.char_h + self.BOT_PAD))
+        self.cfg.setdefault("sizes", {})[self.form.id] = round(scale, 3)
+        if self.ax:
+            self.move_anchor(self.ax, self.ay)
+        self.paint_key = None
+        if not hasattr(self, "_size_timer"):
+            self._size_timer = QTimer(self)
+            self._size_timer.setSingleShot(True)
+            self._size_timer.timeout.connect(self._apply_size)
+        self._size_timer.start(600)
+
+    def _apply_size(self):
+        info = next((f for f in self.forms if f[0] == self.form.id), None)
+        scale = float(self.cfg["sizes"].get(self.form.id, 1.0))
+        try:
+            form = skins.load(info[0], info[1], info[2], self.cfg, self.dpr, scale)
+        except Exception as e:
+            log_error(e)
+            return
+        self.form_cache[form.id] = form
+        keep = (self.cur_state, self.cur_idx)
+        self.set_form(form)
+        if keep[0] in self.pix:
+            self.cur_state, self.cur_idx = keep[0], keep[1] % len(self.pix[keep[0]])
+        self.card.set_portrait(self.pix["sit"][0])
+        save_config(self.cfg)
+
+    def wheelEvent(self, e):
+        """Ctrl + 滚轮缩放她（不按 Ctrl 的滚轮会正常穿给下面的窗口，不会误触）"""
+        if e.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            step = 0.05 if e.angleDelta().y() > 0 else -0.05
+            self.set_size(round(getattr(self, "_size_target", self.form.scale) + step, 3))
+            e.accept()
+        else:
+            e.ignore()
+
     def switch_form(self, fid):
         if fid == self.form.id:
             return
         info = next((f for f in self.forms if f[0] == fid), None)
         if not info:
             return
+        want = float((self.cfg.get("sizes") or {}).get(fid, 1.0))
         try:
-            form = self.form_cache.get(fid) or skins.load(info[0], info[1], info[2], self.cfg, self.dpr)
+            form = self.form_cache.get(fid)
+            if form is None or abs(form.scale - want) > 1e-6:
+                form = skins.load(info[0], info[1], info[2], self.cfg, self.dpr, want)
         except Exception as e:
             log_error(e)
             self.say("换装失败了…看看 pet.log")
@@ -1042,7 +1098,8 @@ class Pet(QWidget):
 
     def contextMenuEvent(self, e):
         state = {"follow": bool(self.cfg.get("follow_claude", True)) and (not IS_WIN or cw.autostart_enabled()),
-                 "quiet": self.quiet, "accurate": bool(self.cfg.get("accurate_usage", False))}
+                 "quiet": self.quiet, "accurate": bool(self.cfg.get("accurate_usage", False)),
+                 "size": getattr(self, "_size_target", self.form.scale)}
         self.card.hide()
         self.menu = ui_menu.PetMenu(self.thumbs(), self.form.id, state, self.badge)
         self.menu.triggered.connect(self.on_menu)
@@ -1068,6 +1125,8 @@ class Pet(QWidget):
             self.menu_perch()
         elif key == "taskbar":
             self.menu_taskbar()
+        elif key == "size":
+            self.set_size(float(arg))
         elif key == "follow":
             self.toggle_follow(bool(arg))
         elif key == "quiet":
@@ -1132,7 +1191,9 @@ class Pet(QWidget):
         t.scale(sx, sy)
         t.translate(-cx, -py)
         p.setTransform(t)
-        p.drawPixmap(QPointF(self.char_x(), self.TOP_PAD - self.hy), pm)
+        k = getattr(self, "disp_k", 1.0)
+        p.drawPixmap(QRectF(self.char_x(), self.TOP_PAD - self.hy, pm.width() / self.dpr * k, pm.height() / self.dpr * k),
+                     pm, QRectF(pm.rect()))
         p.resetTransform()
         if self.bubble_text:
             self._draw_bubble(p, self.bubble_text)
@@ -1204,7 +1265,7 @@ def main():
         return
     wanted = cfg.get("form") or forms[0][0]
     info = next((f for f in forms if f[0] == wanted), forms[0])
-    form = skins.load(info[0], info[1], info[2], cfg, dpr)
+    form = skins.load(info[0], info[1], info[2], cfg, dpr, (cfg.get("sizes") or {}).get(info[0], 1.0))
     pet = Pet(cfg, forms, form, dpr)
     pet.start()
     sys.exit(app.exec())

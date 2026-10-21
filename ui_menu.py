@@ -283,6 +283,21 @@ class PetMenu(_Popup):
         pos.addStretch(1)
         lay.addLayout(pos)
 
+        size_row = QHBoxLayout()
+        size_row.setSpacing(10)
+        size_row.addWidget(_label("大小", 12, "ink", True))
+        self.size_sl = QSlider(Qt.Orientation.Horizontal)
+        self.size_sl.setRange(50, 200)
+        self.size_sl.setValue(int(round(state.get("size", 1.0) * 100)))
+        self.size_sl.setStyleSheet(slider_qss())
+        self.size_sl.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.size_val = _label(f"{self.size_sl.value()}%", 10, "sub")
+        self.size_val.setFixedWidth(40)
+        self.size_sl.valueChanged.connect(self._size_changed)
+        size_row.addWidget(self.size_sl, 1)
+        size_row.addWidget(self.size_val)
+        lay.addLayout(size_row)
+
         lay.addWidget(Line())
         rows = QVBoxLayout()
         rows.setSpacing(0)
@@ -298,6 +313,10 @@ class PetMenu(_Popup):
         q.setFixedHeight(28)
         q.clicked.connect(lambda _c=False: self._emit("quit", None))
         lay.addWidget(q)
+
+    def _size_changed(self, v):
+        self.size_val.setText(f"{v}%")
+        self.triggered.emit("size", v / 100.0)
 
     def _emit(self, key, arg, close=True):
         self.triggered.emit(key, arg)

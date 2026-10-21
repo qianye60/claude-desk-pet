@@ -47,6 +47,7 @@ class Form:
     def __init__(self, fid, name, states, edge_y, head_y, char_w, char_h, persona=""):
         self.id, self.name = fid, name
         self.persona = persona
+        self.scale = 1.0
         self.states = states
         self.edge_y, self.head_y = edge_y, head_y
         self.char_w, self.char_h = char_w, char_h
@@ -139,9 +140,9 @@ def _bbox(im):
     return im.getchannel("A").getbbox()
 
 
-def load(fid, name, folder, cfg, dpr):
+def load(fid, name, folder, cfg, dpr, scale=1.0):
     meta = _meta_of(folder)
-    height = float(meta["height"])
+    height = float(meta["height"]) * scale
 
     paths = {}
     for state, names in STATES.items():
@@ -178,8 +179,10 @@ def load(fid, name, folder, cfg, dpr):
         return im.resize((w, h), resample)   # 所有图缩成和 sit 一样的像素尺寸，切换不跳
 
     states = {s: [fit(im) for im in ims] for s, ims in raw.items()}
-    return Form(fid, name, states, height * float(meta["edge"]), height * float(meta["head"]),
+    form = Form(fid, name, states, height * float(meta["edge"]), height * float(meta["head"]),
                 w / dpr, h / dpr, persona=str(meta.get("persona", "")))
+    form.scale = scale
+    return form
 
 
 
