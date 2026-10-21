@@ -27,9 +27,9 @@
 |---|---|---|
 | 像素机器人 | `make_pixel_skin.py` 生成（`skins/pixel`） | 安静、冷幽默、程序员口吻 |
 | 元气少女 | `skin/`（get_skin.py 下载的立绘） | 活泼可爱、爱撒娇 |
-| 成熟御姐 | 你自己放图到 `skins/yujie` | 从容、毒舌心软 |
+| 成熟御姐 | `skins/yujie`（AI 生成的一套 10 张全身立绘；想重做见 `tools/gen_yujie.py`） | 从容、毒舌心软 |
 
-御姐形态需要的图和 AI 绘图提示词见 [docs/生图提示词.md](docs/生图提示词.md)；`skin_template/yujie/skin.json` 是配置模板，复制到 `skins/yujie` 里和图片放在一起即可。
+御姐形态的提示词见 [docs/生图提示词.md](docs/生图提示词.md)。`tools/gen_yujie.py` 能用兼容 OpenAI 图像接口的服务批量生成：先出以设定图为参考的 `sit.png`，其余 9 张以它为参考，背景用绿幕，生成后自动抠成透明并统一脚底位置（接口地址和密钥只通过环境变量 `IMG_BASE`、`IMG_KEY` 传入，不会写进任何文件）。`skin_template/yujie/skin.json` 是配置模板。
 
 每个形态文件夹：
 
@@ -64,7 +64,7 @@
 - 台词：后台批量生成并缓存（`ai_lines.json`），用完再生成；每个形态用自己的人格
 - 聊天：右键 → 聊天，回车发送。她会先“想一想”（拿出本子）
 - 隔离运行：不读你的全局设置/CLAUDE.md/技能/连接器，只用桌宠自己的人设，所以不会“出戏”
-- 模型：`config.json` 的 `ai_model`，默认 `haiku`（省额度）。想和窗口一致就改成 `sonnet`、`opus` 等。Claude Desktop 窗口当前选的模型没有对外接口，没法自动同步
+- 模型：`config.json` 的 `ai_model`，默认 `claude-haiku-5-5`（Haiku 5.5，又快又省）。想和窗口一致就改成 `sonnet`、`opus` 等。Claude Desktop 窗口当前选的模型没有对外接口，没法自动同步
 - 出错原因写在 `ai.log`
 
 ### 自己翻文件夹（默认关，需要你打开）

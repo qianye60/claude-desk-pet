@@ -7,7 +7,7 @@
 - 每个形态可以有自己的人格（skin.json 里的 persona），切换形态时人格跟着换
 - AI 的回复带一个“动作”（挥手/欢呼/开心…），她会一边说一边做；动作不是靠手动点出来的
 - 每次调用约 10~25 秒，台词是批量生成并缓存的（ai_lines.json），聊天时她会先“想一想”
-- 模型用 config.json 里的 "ai_model"（默认 haiku，省额度；想和窗口一致就改成 sonnet / opus 等）
+- 模型用 config.json 里的 "ai_model"（默认 Haiku 5.5，又快又省；想和窗口一致就改成 sonnet / opus 等）
 - 没装命令行或没登录时自动静默失败，桌宠照常用内置台词（失败原因写在 ai.log）
 """
 import os
@@ -104,7 +104,7 @@ def parse_items(out):
 
 
 class AiBrain:
-    def __init__(self, base_dir, model="haiku", enabled=True):
+    def __init__(self, base_dir, model="claude-haiku-5-5", enabled=True):
         self.base_dir = base_dir
         self.model = model
         self.enabled = enabled

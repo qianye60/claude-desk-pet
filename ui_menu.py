@@ -108,10 +108,15 @@ class FormCard(QAbstractButton):
         p.setClipPath(clip)
         p.fillPath(clip, _tint("accent", 40))
         if self.pm is not None:
-            s = min(area.width() / self.pm.width(), area.height() / self.pm.height()) * 1.0
-            s = max(s, area.width() / self.pm.width())          # 横向铺满，高出的部分裁掉（保留头部）
-            pw, ph = self.pm.width() * s, self.pm.height() * s
-            p.drawPixmap(QRectF(area.center().x() - pw / 2, area.top(), pw, ph), self.pm, QRectF(self.pm.rect()))
+            if self.pm.width() > self.pm.height() * 1.1:          # 宽图（像素机器人）：完整放进去，四周留白
+                s = min(area.width() / self.pm.width(), area.height() / self.pm.height()) * 0.78
+                pw, ph = self.pm.width() * s, self.pm.height() * s
+                top = area.center().y() - ph / 2
+            else:                                                  # 立绘：横向铺满，高出的部分裁掉（保留头部）
+                s = max(area.width() / self.pm.width(), 0.0)
+                pw, ph = self.pm.width() * s, self.pm.height() * s
+                top = area.top()
+            p.drawPixmap(QRectF(area.center().x() - pw / 2, top, pw, ph), self.pm, QRectF(self.pm.rect()))
         p.restore()
         p.setPen(col("ink"))
         f = QFont(FONT, 10)

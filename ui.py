@@ -498,9 +498,9 @@ class InfoCard(QWidget):
 
     def leaveEvent(self, e):
         self.inside = False
-        self.hide_timer.start(6000)
+        self.hide_timer.start(1200)           # 鼠标移开就很快收起来
 
-    def popup(self, seconds=12):
+    def popup(self, seconds=4.0):
         was = self.isVisible()
         self.show()
         self.raise_()

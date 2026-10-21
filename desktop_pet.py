@@ -55,7 +55,7 @@ DEFAULT_CONFIG = {
     "accurate_usage": False,         # true=用官方接口查精确额度（见 usage_api.py）
     "theme": "auto",                 # 界面主题：auto 跟随系统 / light / dark
     "ai_enabled": True,              # 通过本机的 Claude Code 命令行让她生成台词、陪你聊天
-    "ai_model": "haiku",             # AI 用的模型：haiku 省额度；想和窗口一致就改成 sonnet / opus 等
+    "ai_model": "claude-haiku-5-5",  # AI 用的模型：Haiku 5.5 又快又省；想换就改成 sonnet / opus 等
     "snoop_enabled": True,           # 允许“翻翻我的文件夹”（只看文件名，第一次会让你确认）
     "snoop_consent": False,          # 你确认过之后会自动变成 true
     "snoop_folders": [],             # 留空 = 桌面、文档、视频
@@ -183,7 +183,7 @@ class Pet(QWidget):
 
         # 调教 / AI / 聊天
         self.train = Training(BASE_DIR)
-        self.ai = AiBrain(BASE_DIR, cfg.get("ai_model", "haiku"), bool(cfg.get("ai_enabled", True)))
+        self.ai = AiBrain(BASE_DIR, cfg.get("ai_model", "claude-haiku-5-5"), bool(cfg.get("ai_enabled", True)))
         self.next_ai_check = now + 45
         self.last_line = None            # (最近一句自言自语, 说的时刻)，用来“别再说这句”
         self.thinking_until = 0.0
@@ -629,6 +629,14 @@ class Pet(QWidget):
                 self.say("唔…脑子没转过来，等会儿再试试？" if self.ai.available
                          else "我还没接上 AI：需要先装好并登录 Claude Code 命令行～", dur=4.5)
 
+    def _beside_x(self, width):
+        """弹窗放在她身体旁边的中心 x（优先左边，左边没位置放右边），这样不会盖住她的脸"""
+        ag = self.screen_for(self.ax, self.ay).availableGeometry()
+        left = self.ax - self.char_w / 2 - width / 2 + 10
+        if left - width / 2 >= ag.left():
+            return left
+        return self.ax + self.char_w / 2 + width / 2 - 10
+
     def open_chat(self):
         if not self.ai.available:
             self.say("要先装好并登录 Claude Code 命令行，我才能陪你聊～", dur=4.5)
@@ -636,7 +644,8 @@ class Pet(QWidget):
         box = ui_menu.ChatBox()
         box.sent.connect(self.send_chat)
         self.popups.append(box)
-        box.popup_near(self.ax, self.ay - self.char_h * 0.35)
+        gx = self._beside_x(300)
+        box.popup_near(gx, self.ay - self.char_h * 0.28)
 
     def send_chat(self, text):
         self.last_interact = time.monotonic()
@@ -650,7 +659,7 @@ class Pet(QWidget):
                                  snoop_on=bool(self.cfg.get("snoop_consent", False)))
         card.changed.connect(self.on_train)
         self.popups.append(card)
-        card.popup_near(self.ax, self.ay - self.char_h * 0.1)
+        card.popup_near(self._beside_x(308), self.ay - 4)
 
     def on_train(self, key, val):
         t = self.train
@@ -834,17 +843,23 @@ class Pet(QWidget):
         self.card.update_data(self.usage, self.form.name)
 
     def place_card(self):
+        """卡片的位置：坐在窗口右下角时弹在她头顶上方（避开 Claude 的输入框和发送按钮），
+        否则放在她左边（实在放不下放右边）"""
         c = self.card
         c.adjustSize()
         w, h = c.width(), c.height()
         sc = self.screen_for(self.ax, self.ay).availableGeometry()
         cx0 = self.x() + self.char_x()
         cx1 = cx0 + self.char_w
-        x = cx0 - w + 14 + self.char_w * 0.2          # 14 是卡片外圈留给阴影的边
-        if x < sc.left():
-            x = cx1 - 14 - self.char_w * 0.2
+        if self.docked and self.mode == "perch":
+            x = cx1 - w + 14 + self.char_w * 0.1            # 右边与她对齐
+            y = self.y() + self.TOP_PAD - h + 30              # 卡片底边落在她头顶附近
+        else:
+            x = cx0 - w + 14 + self.char_w * 0.2
+            if x < sc.left():
+                x = cx1 - 14 - self.char_w * 0.2
+            y = self.ay - h + 18
         x = min(max(x, sc.left()), sc.right() - w + 1)
-        y = self.ay - h + 18
         y = min(max(y, sc.top()), sc.bottom() - h + 1)
         c.move(int(x), int(y))
 
