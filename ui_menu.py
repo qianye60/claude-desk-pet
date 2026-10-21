@@ -109,7 +109,7 @@ class FormCard(QAbstractButton):
         p.fillPath(clip, _tint("accent", 40))
         if self.pm is not None:
             if self.pm.width() > self.pm.height() * 1.1:          # 宽图（像素机器人）：完整放进去，四周留白
-                s = min(area.width() / self.pm.width(), area.height() / self.pm.height()) * 0.78
+                s = min(area.width() / self.pm.width(), area.height() / self.pm.height()) * 0.52
                 pw, ph = self.pm.width() * s, self.pm.height() * s
                 top = area.center().y() - ph / 2
             else:                                                  # 立绘：横向铺满，高出的部分裁掉（保留头部）
@@ -287,14 +287,14 @@ class PetMenu(_Popup):
         size_row.setSpacing(10)
         size_row.addWidget(_label("大小", 12, "ink", True))
         self.size_sl = QSlider(Qt.Orientation.Horizontal)
-        self.size_sl.setRange(50, 200)
+        self.size_sl.setRange(40, 300)
         self.size_sl.setValue(int(round(state.get("size", 1.0) * 100)))
         self.size_sl.setStyleSheet(slider_qss())
         self.size_sl.setCursor(Qt.CursorShape.PointingHandCursor)
         self.size_val = _label(f"{self.size_sl.value()}%", 10, "sub")
         self.size_val.setFixedWidth(40)
         self.size_sl.valueChanged.connect(self._size_changed)
-        size_row.addWidget(self.size_sl, 1)
+        size_row.addWidget(padded_slider(self.size_sl), 1)
         size_row.addWidget(self.size_val)
         lay.addLayout(size_row)
 
@@ -338,12 +338,23 @@ class PetMenu(_Popup):
 
 
 # ---------------------------------------------------------------- 调教卡片
+def padded_slider(sl, h_pad=9):
+    """给滑块两端留边距、固定高度，避免把手停在两端时被控件边缘裁掉"""
+    sl.setFixedHeight(26)
+    w = QWidget()
+    lay = QHBoxLayout(w)
+    lay.setContentsMargins(h_pad, 0, h_pad, 0)
+    lay.addWidget(sl)
+    return w
+
+
 def slider_qss():
     return f"""
+    QSlider {{ background: transparent; }}
     QSlider::groove:horizontal {{ height: 6px; background: {T['track']}; border-radius: 3px; }}
     QSlider::sub-page:horizontal {{ background: {T['accent']}; border-radius: 3px; }}
     QSlider::handle:horizontal {{ background: white; border: 2px solid {T['accent']};
-                                  width: 14px; height: 14px; margin: -6px 0; border-radius: 9px; }}
+                                  width: 14px; height: 14px; margin: -8px 0; border-radius: 9px; }}
     """
 
 
@@ -373,7 +384,7 @@ class TrainCard(_Popup):
             sl.setStyleSheet(slider_qss())
             sl.setCursor(Qt.CursorShape.PointingHandCursor)
             sl.valueChanged.connect(lambda v, k=key: self.changed.emit(k, v / 10.0))
-            box.addWidget(sl)
+            box.addWidget(padded_slider(sl))
             lay.addLayout(box)
 
         lay.addWidget(_label("爱说的内容", 11, "ink", True))

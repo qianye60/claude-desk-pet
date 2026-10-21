@@ -197,6 +197,21 @@ def place_just_above(me, target):
         insert = prev
     user32.SetWindowPos(me, insert, 0, 0, 0, 0, SWP_FLAGS)
 
+GW_HWNDNEXT = 2
+
+
+def is_above(a, b, limit=400):
+    """窗口 a 在 z 序上是否位于窗口 b 之上（从 a 往下找 b）"""
+    h = a
+    for _ in range(limit):
+        h = _hwnd_int(user32.GetWindow(h, GW_HWNDNEXT))
+        if not h:
+            return False
+        if h == b:
+            return True
+    return False
+
+
 def foreground():
     return _hwnd_int(user32.GetForegroundWindow())
 

@@ -135,6 +135,7 @@ class Pet(QWidget):
         self.quiet = bool(cfg.get("quiet", False))
         self.z_state = None
         self.next_z = 0.0
+        self.force_top_until = 0.0
         self.docked = False         # 窗口上方没空间，改坐在窗口右下角
 
         now = time.monotonic()
@@ -226,8 +227,8 @@ class Pet(QWidget):
             self.move_anchor(self.ax, self.ay)
 
     def set_size(self, scale):
-        """调整当前形态的大小（0.5~2 倍）：先立刻拉伸现有图，停手 0.6 秒后用原图重新缩放，保证清晰"""
-        scale = max(0.5, min(2.0, float(scale)))
+        """调整当前形态的大小（0.4~3 倍）：先立刻拉伸现有图，停手 0.6 秒后用原图重新缩放，保证清晰"""
+        scale = max(0.4, min(3.0, float(scale)))
         cur = getattr(self, "_size_target", self.form.scale)
         if abs(scale - cur) < 1e-3:
             return
@@ -518,14 +519,36 @@ class Pet(QWidget):
             return
         self.next_z = now + 0.1
         me = int(self.winId())
+        if now < self.force_top_until:                    # 刚被召唤/检测到被盖住：先置顶几秒
+            if self.z_state != "top":
+                cw.set_topmost(me, True)
+                self.z_state = "top"
+            return
         if self.mode == "perch" and self.claude:
             if self.z_state != "normal":
                 cw.set_topmost(me, False)
                 self.z_state = "normal"
             cw.place_just_above(me, self.claude[0])
+            if not cw.is_above(me, self.claude[0]):       # 自检：她必须在 Claude 窗口上面，不在就临时置顶
+                self.force_top_until = now + 3.0
+                cw.set_topmost(me, True)
+                self.z_state = "top"
         elif self.z_state != "top":
             cw.set_topmost(me, True)
             self.z_state = "top"
+
+    def summon(self):
+        """点托盘图标：把她提到最前，位置不在屏幕里就叫回来"""
+        now = time.monotonic()
+        self.force_top_until = now + 4.0
+        self.show()
+        self.raise_()
+        ag = self.screen_for(self.ax, self.ay).availableGeometry()
+        if not ag.adjusted(-20, -20, 20, 20).contains(QPoint(int(self.ax), int(self.ay - self.char_h / 2))):
+            if self.claude:
+                self.menu_perch()
+            else:
+                self.menu_taskbar()
 
     # ---------- 行为
     def say(self, text, dur=None, track=False):
@@ -899,22 +922,17 @@ class Pet(QWidget):
         self.card.update_data(self.usage, self.form.name)
 
     def place_card(self):
-        """卡片的位置：坐在窗口右下角时弹在她头顶上方（避开 Claude 的输入框和发送按钮），
-        否则放在她左边（实在放不下放右边）"""
+        """额度卡片放在她左边（左边放不下放右边），底边对齐她的脚，并限制在屏幕内"""
         c = self.card
         c.adjustSize()
         w, h = c.width(), c.height()
         sc = self.screen_for(self.ax, self.ay).availableGeometry()
         cx0 = self.x() + self.char_x()
         cx1 = cx0 + self.char_w
-        if self.docked and self.mode == "perch":
-            x = cx1 - w + 14 + self.char_w * 0.1            # 右边与她对齐
-            y = self.y() + self.TOP_PAD - h + 30              # 卡片底边落在她头顶附近
-        else:
-            x = cx0 - w + 14 + self.char_w * 0.2
-            if x < sc.left():
-                x = cx1 - 14 - self.char_w * 0.2
-            y = self.ay - h + 18
+        x = cx0 - w + 14 + self.char_w * 0.2
+        if x < sc.left():
+            x = cx1 - 14 - self.char_w * 0.2
+        y = self.ay - h + 18
         x = min(max(x, sc.left()), sc.right() - w + 1)
         y = min(max(y, sc.top()), sc.bottom() - h + 1)
         c.move(int(x), int(y))
@@ -1160,7 +1178,7 @@ class Pet(QWidget):
         a.triggered.connect(self.toggle_card)
         self.tray_menu.addAction(a)
         a = QAction("叫它回来", self.tray_menu)
-        a.triggered.connect(self.menu_perch)
+        a.triggered.connect(lambda: (self.summon(), self.menu_perch()))
         self.tray_menu.addAction(a)
         a = QAction("去任务栏上坐着", self.tray_menu)
         a.triggered.connect(self.menu_taskbar)
@@ -1170,7 +1188,7 @@ class Pet(QWidget):
         a.triggered.connect(QApplication.quit)
         self.tray_menu.addAction(a)
         self.tray.setContextMenu(self.tray_menu)
-        self.tray.activated.connect(lambda r: self.toggle_card()
+        self.tray.activated.connect(lambda r: (self.summon(), self.toggle_card())
                                     if r == QSystemTrayIcon.ActivationReason.Trigger else None)
         self.tray.show()
 
