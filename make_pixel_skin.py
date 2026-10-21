@@ -19,6 +19,8 @@ EYE = (36, 26, 22, 255)
 BOOK = (112, 72, 52, 255)
 PAGE = (244, 230, 206, 255)
 DROP = (126, 190, 240, 255)
+BLUSH = (244, 150, 150, 255)
+QMARK = (255, 214, 130, 255)
 
 PERSONA = ("你是住在电脑桌面 Claude 窗口边上的一只像素小机器人，是 Claude 的小助手形象：话不多，"
            "安静、冷幽默、偶尔笨拙地卖个萌，爱用程序员的口吻吐槽（比如“编译通过了，奇迹”）。"
@@ -65,6 +67,14 @@ def draw(state):
         legs = [(7, 27, 8, 31), (10, 27, 11, 31), (23, 27, 24, 31), (27, 27, 28, 31)]
     elif state == "worried":
         arm_l, arm_r = [(2, 21, 5, 24)], [(30, 21, 33, 24)]
+    elif state == "laugh":
+        arm_l, arm_r = mid_l, mid_r
+    elif state == "tease":
+        arm_r = [(30, 16, 33, 19), (31, 12, 34, 15)]       # 一只手举到“嘴边”
+    elif state == "yawn":
+        arm_l, arm_r = up_l, up_r
+    elif state == "think":
+        arm_r = [(30, 16, 33, 19)]
 
     for l in legs:
         rect(d, l, ORANGE, dy=body_dy)
@@ -92,6 +102,25 @@ def draw(state):
     elif state == "working":
         rect(d, EYE_L, EYE, dy=1)                           # 低头看书
         rect(d, EYE_R, EYE, dy=1)
+    elif state == "laugh":
+        for cx in (10, 24):                                 # 大笑：^ ^，眼睛更弯更粗
+            px(d, [(cx - 1, 16), (cx, 15), (cx + 1, 15), (cx + 2, 16), (cx, 16), (cx + 1, 16)], EYE)
+    elif state == "shy":
+        rect(d, (9, 16, 12, 16), EYE)                       # 害羞：眯眼 + 腮红
+        rect(d, (23, 16, 26, 16), EYE)
+        rect(d, (7, 19, 10, 20), BLUSH)
+        rect(d, (25, 19, 28, 20), BLUSH)
+    elif state == "tease":
+        rect(d, (9, 16, 12, 16), EYE)                       # 坏笑：左眼眯、右眼眨
+        px(d, [(24, 15), (25, 15), (23, 16), (26, 16)], EYE)
+    elif state == "think":
+        rect(d, (10, 12, 11, 15), EYE)                      # 看向右上方
+        rect(d, (24, 12, 25, 15), EYE)
+        px(d, [(31, 3), (32, 2), (33, 3), (33, 4), (32, 5), (32, 6), (32, 8)], QMARK)   # ？
+    elif state == "yawn":
+        rect(d, (9, 16, 12, 16), EYE)
+        rect(d, (23, 16, 26, 16), EYE)
+        rect(d, (16, 20, 19, 23), (96, 52, 40, 255))        # 张大的嘴
     elif state == "drag":
         rect(d, (9, 13, 11, 17), EYE)
         rect(d, (24, 13, 26, 17), EYE)
@@ -109,7 +138,8 @@ def draw(state):
 def main():
     os.makedirs(OUT, exist_ok=True)
     states = {"sit": "sit", "blink": "blink", "happy": "happy", "cheer": "cheer", "wave": "wave",
-              "pout": "pout", "worried": "worried", "working": "working", "sleep": "sleep", "drag": "drag"}
+              "pout": "pout", "worried": "worried", "working": "working", "sleep": "sleep", "drag": "drag",
+              "shy": "shy", "tease": "tease", "laugh": "laugh", "think": "think", "yawn": "yawn"}
     for name, st in states.items():
         draw(st).save(os.path.join(OUT, name + ".png"))
     meta = os.path.join(OUT, "skin.json")

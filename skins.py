@@ -34,11 +34,21 @@ STATES = {
     "working": ("working",),
     "sleep": ("sleep",),
     "drag": ("drag",),
+    "shy": ("shy",),
+    "tease": ("tease",),
+    "laugh": ("laugh",),
+    "think": ("think",),
+    "yawn": ("yawn",),
 }
 
 FALLBACK = {
     "cheer": ("happy",), "wave": ("happy",), "pout": ("worried",), "sleep": ("blink",),
+    "shy": ("happy",), "tease": ("happy",), "laugh": ("cheer", "happy"),
+    "think": ("working",), "yawn": ("sleep", "blink"),
 }
+
+BUST_FRAC = 0.5      # 半身模式：只取立绘上面这么多（头到腰）
+BUST_K = 1.8         # 半身模式下脸放大的倍数（相对全身同样“高度”设置）
 
 
 class Form:
@@ -48,6 +58,8 @@ class Form:
         self.id, self.name = fid, name
         self.persona = persona
         self.scale = 1.0
+        self.bust = False
+        self.tall = False
         self.states = states
         self.edge_y, self.head_y = edge_y, head_y
         self.char_w, self.char_h = char_w, char_h
@@ -140,7 +152,7 @@ def _bbox(im):
     return im.getchannel("A").getbbox()
 
 
-def load(fid, name, folder, cfg, dpr, scale=1.0):
+def load(fid, name, folder, cfg, dpr, scale=1.0, bust=False):
     meta = _meta_of(folder)
     height = float(meta["height"]) * scale
 
@@ -170,6 +182,13 @@ def load(fid, name, folder, cfg, dpr, scale=1.0):
         raw = {s: [im.crop(_bbox(im)) if _bbox(im) else im for im in ims] for s, ims in raw.items()}
 
     ref = raw["sit"][0]
+    use_bust = bool(bust) and ref.height > ref.width * 1.2          # 只有高挑的全身立绘才有半身模式
+    head_frac = float(meta["head"])
+    if use_bust:
+        raw = {s: [im.crop((0, 0, im.width, int(im.height * BUST_FRAC))) for im in ims] for s, ims in raw.items()}
+        ref = raw["sit"][0]
+        height *= BUST_FRAC * BUST_K
+        head_frac = min(0.9, head_frac / BUST_FRAC)
     h = max(1, int(round(height * dpr)))
     w = max(1, int(round(ref.width * h / ref.height)))
 
@@ -179,9 +198,11 @@ def load(fid, name, folder, cfg, dpr, scale=1.0):
         return im.resize((w, h), resample)   # 所有图缩成和 sit 一样的像素尺寸，切换不跳
 
     states = {s: [fit(im) for im in ims] for s, ims in raw.items()}
-    form = Form(fid, name, states, height * float(meta["edge"]), height * float(meta["head"]),
+    form = Form(fid, name, states, height * (1.0 if use_bust else float(meta["edge"])), height * head_frac,
                 w / dpr, h / dpr, persona=str(meta.get("persona", "")))
     form.scale = scale
+    form.bust = use_bust
+    form.tall = (raw["sit"][0].height > raw["sit"][0].width * 1.2) or use_bust
     return form
 
 
@@ -197,9 +218,11 @@ def thumbnail(folder, px):
                 im = im.crop(box)
             if im.height > im.width * 1.2:                       # 全身立绘：缩略图取头和上半身那一块
                 im = im.crop((0, 0, im.width, im.width))
-            side = max(im.width, im.height)
+            wide = im.width > im.height * 1.1
+            side = int(max(im.width, im.height) * (1.3 if wide else 1.0))
             canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-            canvas.paste(im, ((side - im.width) // 2, 0))      # 顶端对齐，头像取上半身
+            # 宽图（像素机器人）居中留边距；立绘顶端对齐，头像取上半身
+            canvas.paste(im, ((side - im.width) // 2, (side - im.height) // 2 if wide else 0))
             pixel = _meta_of(folder).get("pixel")
             return canvas.resize((px, px), Image.NEAREST if pixel else Image.LANCZOS)
     return None

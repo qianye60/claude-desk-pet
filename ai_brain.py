@@ -29,8 +29,11 @@ RULES = (
     "不要提任务、工具、连接器、额度数字之类的“系统信息”，也不要问主人“要我做什么”。"
     "可以偶尔玩一点网络梗，但要自然不油腻，不要硬凹。"
 )
-ACTS = ("wave", "cheer", "happy", "pout", "worried", "working", "stretch", "hop", "none")
-ACT_HELP = "wave=挥手, cheer=欢呼, happy=开心, pout=鼓脸生气, worried=担心, working=认真/思考, stretch=伸懒腰, hop=蹦一下, none=不做动作"
+ACTS = ("wave", "cheer", "happy", "pout", "worried", "working", "stretch", "hop", "shy", "tease", "laugh", "think",
+        "yawn", "nod", "shake", "dance", "spin", "dizzy", "walk", "none")
+ACT_HELP = ("wave=挥手, cheer=欢呼, happy=开心, pout=鼓脸生气, worried=担心, working=认真看书, stretch=伸懒腰, hop=蹦一下, "
+            "shy=害羞, tease=坏笑调侃, laugh=大笑, think=托腮思考, yawn=打哈欠, nod=点头, shake=摇头, dance=跳舞, "
+            "spin=转身, dizzy=头晕, walk=在窗口边上散步, none=不做动作")
 
 
 def find_claude():

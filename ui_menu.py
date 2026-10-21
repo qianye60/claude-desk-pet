@@ -287,7 +287,7 @@ class PetMenu(_Popup):
         size_row.setSpacing(10)
         size_row.addWidget(_label("大小", 12, "ink", True))
         self.size_sl = QSlider(Qt.Orientation.Horizontal)
-        self.size_sl.setRange(40, 300)
+        self.size_sl.setRange(40, 400)
         self.size_sl.setValue(int(round(state.get("size", 1.0) * 100)))
         self.size_sl.setStyleSheet(slider_qss())
         self.size_sl.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -297,6 +297,12 @@ class PetMenu(_Popup):
         size_row.addWidget(padded_slider(self.size_sl), 1)
         size_row.addWidget(self.size_val)
         lay.addLayout(size_row)
+        if state.get("tall"):                                    # 高挑的全身立绘才有：半身模式，脸更大
+            bust = Row("半身（脸更大）", switch=True)
+            bust.set_on(state.get("bust"))
+            bust.setFixedHeight(28)
+            bust.toggled_by_user.connect(lambda v: self._emit("bust", v, close=False))
+            lay.addWidget(bust)
 
         lay.addWidget(Line())
         rows = QVBoxLayout()

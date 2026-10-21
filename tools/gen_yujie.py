@@ -38,6 +38,11 @@ POSES = {
     "worried": "Slightly furrowed brows, a small frown, hugging the book to her chest, shoulders slightly drawn in.",
     "working": "Looking down at an open book held in one hand, the other hand holding a page, eyes lowered, a focused expression.",
     "sleep": "Dozing while standing, head tilted to one side, eyes closed, relaxed mouth, the book loosely tucked under her arm.",
+    "shy": "Shy and a little flustered, a light blush on her cheeks, eyes glancing away to the side, one hand lifting the book to partly cover her chin, a bashful small smile.",
+    "tease": "Playfully teasing smirk, one eyebrow raised, eyes half-lidded and amused, one finger raised to her lips as if keeping a secret, the other hand holding the book at her side, a mischievous but warm expression.",
+    "laugh": "Laughing happily, eyes closed in crescents, mouth open in a bright laugh, one hand covering her mouth lightly, the other arm holding the book against her side.",
+    "think": "Thoughtful pose, one hand under her chin with the index finger resting on her cheek, eyes looking up and to the side, the other arm holding the book, a curious expression.",
+    "yawn": "Sleepy, yawning with one hand covering her open mouth, eyes squeezed shut, the other hand holding the book loosely, a relaxed drowsy posture.",
     "drag": "Startled, wide eyes, a small o-shaped mouth, hugging the book tightly with both hands, hair and skirt floating slightly upward as if lifted by the collar.",
 }
 

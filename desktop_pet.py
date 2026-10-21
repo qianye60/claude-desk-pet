@@ -60,6 +60,7 @@ DEFAULT_CONFIG = {
     "snoop_consent": False,          # 你确认过之后会自动变成 true
     "snoop_folders": [],             # 留空 = 桌面、文档、视频
     "sizes": {},                     # 每个形态各自的大小倍数（右键菜单的“大小”滑块 / Ctrl+滚轮，自动记住）
+    "bust": {},                      # 每个形态是否用“半身”模式（高挑的全身立绘才有，脸放大约 1.8 倍）
 }
 
 cw = None
@@ -88,6 +89,13 @@ def save_config(cfg):
             json.dump(cfg, f, ensure_ascii=False, indent=2)
     except OSError as e:
         print("config.json 保存失败：", e)
+
+
+def load_form_for(cfg, info, dpr):
+    """按配置里记住的大小和半身设置加载一个形态"""
+    scale = float((cfg.get("sizes") or {}).get(info[0], 1.0))
+    bust = bool((cfg.get("bust") or {}).get(info[0], False))
+    return skins.load(info[0], info[1], info[2], cfg, dpr, scale, bust)
 
 
 def pil_to_pixmap(im, dpr):
@@ -174,6 +182,10 @@ class Pet(QWidget):
         self.paint_key = None
         self.tr = (0.0, 1.0, 1.0)                      # 当前绘制变换：角度、sx、sy
         self.pivot_top = False
+        self.motion = None                             # 纯程序动作：(名字, 开始时刻, 时长)
+        self.mot_hy, self.mot_dx = 0.0, 0.0            # 动作带来的额外上下/左右位移
+        self.flip = 1.0                                # 散步时朝向（-1 = 镜像）
+        self.walk = None                               # 散步目标：("perch", 位置比例) 或 ("free", x)
 
         # 额度 / 统计
         self.usage_reader = usage_info.UsageReader(cfg.get("usage_file") or None,
@@ -227,8 +239,8 @@ class Pet(QWidget):
             self.move_anchor(self.ax, self.ay)
 
     def set_size(self, scale):
-        """调整当前形态的大小（0.4~3 倍）：先立刻拉伸现有图，停手 0.6 秒后用原图重新缩放，保证清晰"""
-        scale = max(0.4, min(3.0, float(scale)))
+        """调整当前形态的大小（0.4~4 倍）：先立刻拉伸现有图，停手 0.6 秒后用原图重新缩放，保证清晰"""
+        scale = max(0.4, min(4.0, float(scale)))
         cur = getattr(self, "_size_target", self.form.scale)
         if abs(scale - cur) < 1e-3:
             return
@@ -252,10 +264,13 @@ class Pet(QWidget):
         self._size_timer.start(600)
 
     def _apply_size(self):
+        self._reload_form()
+
+    def _reload_form(self):
+        """按当前配置（大小、半身）用原图重新缩放当前形态，保持当前的姿势"""
         info = next((f for f in self.forms if f[0] == self.form.id), None)
-        scale = float(self.cfg["sizes"].get(self.form.id, 1.0))
         try:
-            form = skins.load(info[0], info[1], info[2], self.cfg, self.dpr, scale)
+            form = load_form_for(self.cfg, info, self.dpr)
         except Exception as e:
             log_error(e)
             return
@@ -266,6 +281,12 @@ class Pet(QWidget):
             self.cur_state, self.cur_idx = keep[0], keep[1] % len(self.pix[keep[0]])
         self.card.set_portrait(self.pix["sit"][0])
         save_config(self.cfg)
+
+    def toggle_bust(self, on):
+        """半身模式：只显示上半身（脸大约放大 1.8 倍），像从窗口边后面探出来"""
+        self.cfg.setdefault("bust", {})[self.form.id] = bool(on)
+        self._reload_form()
+        self.say("探出来一点，这样看得清脸～" if on else "全身出场！", dur=3)
 
     def wheelEvent(self, e):
         """Ctrl + 滚轮缩放她（不按 Ctrl 的滚轮会正常穿给下面的窗口，不会误触）"""
@@ -283,10 +304,11 @@ class Pet(QWidget):
         if not info:
             return
         want = float((self.cfg.get("sizes") or {}).get(fid, 1.0))
+        want_bust = bool((self.cfg.get("bust") or {}).get(fid, False))
         try:
             form = self.form_cache.get(fid)
-            if form is None or abs(form.scale - want) > 1e-6:
-                form = skins.load(info[0], info[1], info[2], self.cfg, self.dpr, want)
+            if form is None or abs(form.scale - want) > 1e-6 or (form.tall and form.bust != want_bust):
+                form = load_form_for(self.cfg, info, self.dpr)
         except Exception as e:
             log_error(e)
             self.say("换装失败了…看看 pet.log")
@@ -421,6 +443,7 @@ class Pet(QWidget):
         elif self.mode == "fall":
             self._fall_step()
 
+        self._walk_step(now, dt)
         self._check_follow(now)
         self._update_zorder(now)
         self._behaviour(now)
@@ -468,7 +491,7 @@ class Pet(QWidget):
             # 右下角输入框右边的空位：窗口右边外面还有屏幕空间时，让角色骑在右边框上，少挡内容
             over = max(0.0, min(self.char_w * self.DOCK_OVERHANG, sg.right() + 1 - R))
             gx = max(R - half + over, L + half)
-            gy = min(B - self.DOCK_MARGIN, ag.bottom() + 1)
+            gy = min(B - (0 if self.form.bust else self.DOCK_MARGIN), ag.bottom() + 1)
             self.move_anchor(gx, gy)
 
     def _perch_at(self, gx):
@@ -536,6 +559,51 @@ class Pet(QWidget):
         elif self.z_state != "top":
             cw.set_topmost(me, True)
             self.z_state = "top"
+
+    def start_walk(self):
+        """沿窗口上边缘（或任务栏上）散步到另一个位置，朝向跟着走；坐在右下角时没法散步，改跳个舞"""
+        if self.mode == "perch" and self.claude and not self.docked:
+            t = self.perch_frac
+            for _ in range(10):
+                t = random.uniform(0.12, 0.88)
+                if abs(t - self.perch_frac) > 0.15:
+                    break
+            self.walk = ("perch", t)
+        elif self.mode == "free":
+            ag = self.screen_for(self.ax, self.ay).availableGeometry()
+            lo, hi = ag.left() + self.char_w / 2 + 10, ag.right() - self.char_w / 2 - 10
+            self.walk = ("free", random.uniform(lo, hi))
+        else:
+            self.run_act("dance")
+
+    def _walk_step(self, now, dt):
+        if not self.walk:
+            return
+        if self.mode not in ("perch", "free") or self.sleeping or self.dragging:
+            self.walk, self.flip = None, 1.0
+            return
+        kind, target = self.walk
+        speed = 70.0                                        # 像素/秒
+        if kind == "perch" and self.claude:
+            _, L, T, R, B = self.claude
+            width = max(1.0, R - L)
+            cur = self.perch_frac
+            step = speed * dt / width
+            self.flip = 1.0 if target > cur else -1.0
+            self.perch_frac = min(target, cur + step) if target > cur else max(target, cur - step)
+            done = abs(self.perch_frac - target) < 1e-4
+        elif kind == "free":
+            cur = self.ax
+            self.flip = 1.0 if target > cur else -1.0
+            self.ax = min(target, cur + speed * dt) if target > cur else max(target, cur - speed * dt)
+            done = abs(self.ax - target) < 0.5
+        else:
+            done = True
+        if done:
+            self.walk, self.flip = None, 1.0
+
+    def start_motion(self, name, dur):
+        self.motion = (name, time.monotonic(), dur)
 
     def summon(self):
         """点托盘图标：把她提到最前，位置不在屏幕里就叫回来"""
@@ -644,21 +712,18 @@ class Pet(QWidget):
         self._hover(now)
 
     def _ambient(self):
-        names = ["wave", "cheer", "working", "stretch", "hop", "worried"]
-        base = [3, 2, 3, 2, 2, 0.5]
-        weights = [b * self.train.action_weight(n) for n, b in zip(names, base)]
+        """闲着没事时随机做点什么（频率受“活泼程度”影响；各动作可被调教关掉）"""
+        names = ["wave", "cheer", "working", "stretch", "hop", "worried", "walk", "dance", "spin",
+                 "think", "yawn", "shy", "tease", "laugh", "nod", "shake", "dizzy"]
+        base = [3, 2, 3, 2, 2, 0.5, 2.5, 1, 0.8, 1.5, 1, 0.6, 1, 1, 1, 0.5, 0.4]
+        weights = [w * self.train.action_weight(n) for n, w in zip(names, base)]
         if sum(weights) <= 0:
             return                                  # 动作全被你调教关了
         choice = random.choices(names, weights=weights)[0]
-        if choice == "stretch":
-            self.stretch()
-        elif choice == "hop":
-            self.hop(220)
-            self.kick(0.08)
-        elif choice == "working":
+        if choice == "working":
             self.act("working", random.uniform(8, 14))
         else:
-            self.act(choice, 2.0)
+            self.run_act(choice)
 
     def _watch_quota(self):
         five = self.usage.five
@@ -703,7 +768,7 @@ class Pet(QWidget):
                 self.run_act(act if act != "none" else "happy")
             elif tag == "snoop" and text:
                 self.say(text, dur=max(8.0, len(text) * 0.3 + 3.0))
-                self.run_act(act if act != "none" else "happy")
+                self.run_act(act if act != "none" else "tease")
             elif tag in ("chat_fail", "snoop_fail"):
                 self.say("唔…脑子没转过来，等会儿再试试？" if self.ai.available
                          else "我还没接上 AI：需要先装好并登录 Claude Code 命令行～", dur=4.5)
@@ -902,11 +967,37 @@ class Pet(QWidget):
         sx = 1.0 + 0.7 * self.q
         self.pivot_top = self.mode == "drag" or abs(self.pend) > 0.4 or abs(self.pendv) > 2.0
 
+        # 纯程序动作叠加：点头 / 摇头 / 跳舞 / 转身 / 头晕 / 散步时的小颠簸
+        self.mot_hy, self.mot_dx = 0.0, 0.0
+        if self.motion:
+            name, t0, dur = self.motion
+            t = now - t0
+            if t >= dur:
+                self.motion = None
+            else:
+                u = t / dur
+                decay = 1.0 - u
+                if name == "nod":
+                    sy *= 1.0 - 0.07 * abs(math.sin(2 * math.pi * 1.5 * t))
+                elif name == "shake":
+                    angle += 6.0 * math.sin(2 * math.pi * 3.0 * t) * decay
+                elif name == "dance":
+                    angle += 7.0 * math.sin(2 * math.pi * 1.3 * t)
+                    self.mot_hy = 12.0 * abs(math.sin(2 * math.pi * 1.3 * t))
+                elif name == "spin":
+                    c = math.cos(2 * math.pi * 2.0 * u)
+                    sx *= c if abs(c) > 0.06 else (0.06 if c >= 0 else -0.06)
+                    self.mot_hy = 16.0 * math.sin(math.pi * min(1.0, u * 1.2))
+                elif name == "dizzy":
+                    angle += 9.0 * math.sin(2 * math.pi * 2.2 * t) * decay
+                    self.mot_dx = 6.0 * math.sin(2 * math.pi * 1.1 * t) * decay
+        if self.walk:
+            self.mot_hy = 5.0 * abs(math.sin(2 * math.pi * 3.2 * now))      # 走路的小颠簸
         text = self.say_text if now < self.say_until else ""
         if self.card.isVisible():
             text = ""
         key = (self.cur_state, self.cur_idx, text, self.side, round(angle * 20), round(sx * 400),
-               round(sy * 400), round(self.hy), self.pivot_top)
+               round(sy * 400), round(self.hy), round(self.mot_hy), round(self.mot_dx), self.flip, self.pivot_top)
         if key != self.paint_key:
             self.paint_key = key
             self.tr = (angle, sx, sy)
@@ -971,7 +1062,7 @@ class Pet(QWidget):
             self.kick(0.18)
         else:
             self.say(random.choice(LINES["click"]))
-            self.act("happy", 1.0)
+            self.act(random.choices(["happy", "laugh", "shy", "tease"], weights=[6, 1.5, 1.5, 1])[0], 1.4)
             self.kick(0.16)
             if (self.cfg.get("click_opens_panel", True) and now - self.last_card_toggle > 1.2
                     and len(self.click_times) < 3):
@@ -1054,6 +1145,26 @@ class Pet(QWidget):
             self.act("working", 6.0)
         elif name in ("wave", "cheer", "happy", "pout", "worried"):
             self.act(name, 2.4)
+        elif name in ("shy", "tease", "think"):
+            self.act(name, 2.8)
+        elif name == "laugh":
+            self.act("laugh", 2.6)
+            self.hop(200)
+        elif name == "yawn":
+            self.act("yawn", 2.8)
+            self.stretch()
+        elif name == "walk":
+            self.start_walk()
+        elif name == "dance":
+            self.act("cheer", 3.6)
+            self.start_motion("dance", 3.6)
+        elif name == "spin":
+            self.act("happy", 1.2)
+            self.start_motion("spin", 1.1)
+        elif name in ("nod", "shake", "dizzy"):
+            self.start_motion(name, 1.4 if name != "dizzy" else 2.4)
+            if name == "dizzy":
+                self.act("worried", 2.4)
 
     # ---------- 鼠标
     def mousePressEvent(self, e):
@@ -1117,7 +1228,8 @@ class Pet(QWidget):
     def contextMenuEvent(self, e):
         state = {"follow": bool(self.cfg.get("follow_claude", True)) and (not IS_WIN or cw.autostart_enabled()),
                  "quiet": self.quiet, "accurate": bool(self.cfg.get("accurate_usage", False)),
-                 "size": getattr(self, "_size_target", self.form.scale)}
+                 "size": getattr(self, "_size_target", self.form.scale),
+                 "tall": self.form.tall, "bust": self.form.bust}
         self.card.hide()
         self.menu = ui_menu.PetMenu(self.thumbs(), self.form.id, state, self.badge)
         self.menu.triggered.connect(self.on_menu)
@@ -1145,6 +1257,8 @@ class Pet(QWidget):
             self.menu_taskbar()
         elif key == "size":
             self.set_size(float(arg))
+        elif key == "bust":
+            self.toggle_bust(bool(arg))
         elif key == "follow":
             self.toggle_follow(bool(arg))
         elif key == "quiet":
@@ -1202,15 +1316,17 @@ class Pet(QWidget):
         angle, sx, sy = self.tr
         cx = self.char_x() + self.char_w / 2
         # 平时以脚底为支点；被拎起/刚松手时以头顶为支点，像挂着的钟摆
-        py = (self.TOP_PAD - self.hy) if self.pivot_top else (self.edge_win() - self.hy)
+        oy = self.hy + self.mot_hy
+        cx += self.mot_dx
+        py = (self.TOP_PAD - oy) if self.pivot_top else (self.edge_win() - oy)
         t = QTransform()
         t.translate(cx, py)
         t.rotate(angle)
-        t.scale(sx, sy)
+        t.scale(sx * self.flip, sy)
         t.translate(-cx, -py)
         p.setTransform(t)
         k = getattr(self, "disp_k", 1.0)
-        p.drawPixmap(QRectF(self.char_x(), self.TOP_PAD - self.hy, pm.width() / self.dpr * k, pm.height() / self.dpr * k),
+        p.drawPixmap(QRectF(self.char_x() + self.mot_dx, self.TOP_PAD - oy, pm.width() / self.dpr * k, pm.height() / self.dpr * k),
                      pm, QRectF(pm.rect()))
         p.resetTransform()
         if self.bubble_text:
@@ -1283,7 +1399,7 @@ def main():
         return
     wanted = cfg.get("form") or forms[0][0]
     info = next((f for f in forms if f[0] == wanted), forms[0])
-    form = skins.load(info[0], info[1], info[2], cfg, dpr, (cfg.get("sizes") or {}).get(info[0], 1.0))
+    form = load_form_for(cfg, info, dpr)
     pet = Pet(cfg, forms, form, dpr)
     pet.start()
     sys.exit(app.exec())
