@@ -2,6 +2,8 @@
 
 一只住在 Claude Desktop 窗口边上的桌宠（Windows，Python + PySide6）。
 
+> **非官方项目**：与 Anthropic 无关，也未获其认可。借用与参考的项目见文末“致谢与借用”。
+
 - 窗口上方放得下，她就**站在窗口上边缘**；窗口贴顶或最大化，就**坐在右下角、输入框右边的空位**，不挡标题栏和聊天内容
 - 三种形态可切换，**切换形态时 AI 的人格也跟着换**：像素机器人 / 元气少女 / 成熟御姐
 - 立绘是静态图，用程序做出“活”的感觉：呼吸、轻微摇摆、鼠标靠近时歪头、点击压扁再弹回、拖动像钟摆晃、落地压扁
@@ -138,9 +140,21 @@ config.json 用记事本改也行（带不带 BOM 都能读）。改完重启生
 
 `desktop_pet.py` 主程序 · `ui.py` 额度卡片与主题 · `ui_menu.py` 右键菜单/调教/聊天 · `skins.py` 形态加载 · `lines.py` 台词 · `ai_brain.py` AI · `snoop.py` 文件夹扫描 · `training.py` 调教 · `usage_info.py` / `usage_api.py` 额度 · `claude_win.py` Win32 工具 · `follow_claude.pyw` 开机哨兵 · `make_pixel_skin.py` / `get_skin.py` 生成/下载形态
 
-## 版权
+## 致谢与借用
 
-`skin/` 里的立绘来自 [Ancean/claude-musume](https://github.com/Ancean/claude-musume)（MIT，LICENSE 在该文件夹内）。其余代码为本项目原创。你自己放进 `skins/` 的图片版权归你；用别人的图请先取得作者同意。
+本项目的代码是原创的；下面这些是借用、参考或依赖的东西，都在这里写明：
+
+| 来源 | 许可 | 怎么用的 |
+|---|---|---|
+| [Ancean/claude-musume](https://github.com/Ancean/claude-musume) | MIT | ① “元气少女”形态的立绘来自它的 `buddy-art`（`get_skin.py` 在你本机下载到 `skin/`，**本仓库不分发这些图片**，它的 LICENSE 随图放在 `skin/LICENSE`）；② 读取 Claude Desktop 本地 `plan-usage-history.json` 并推算重置时间的思路来自它的 `usage_data.py`（`usage_info.py` 是自己重新写的）；③ 立绘文件命名约定和“生图提示词文档”的做法也参考了它 |
+| [lmy414/ai-chan-sheets](https://github.com/lmy414/ai-chan-sheets)（Claude娘 设定图，其说明称基于 ZipZipPipe（胖次狐）的 AI 娘立绘） | CC BY-NC-SA 4.0 | “成熟御姐”形态是以这张设定图的正面全身图为参考、用图像模型重新生成的，因此属于它的衍生作品：**仅限非商业使用、需署名、衍生需同协议**。生成的图片**不包含在本仓库里** |
+| Anthropic：Claude、Claude Code、Claude Desktop | 商标归 Anthropic | **这是非官方的个人项目，与 Anthropic 无关，也未获其认可。** 像素机器人形态是参考 Claude Code 吉祥物画的同人像素画；AI 功能调用的是你自己本机已登录的 Claude Code 命令行；“精确额度”用的 `/api/oauth/usage` 是未公开接口，写法参考了社区在 [anthropics/claude-code](https://github.com/anthropics/claude-code) 的 issue 里的讨论，随时可能失效 |
+| 图像模型 `gpt-image-2.5` | — | 成熟御姐的立绘由它通过兼容 OpenAI 的图像接口生成（`tools/gen_yujie.py`） |
+| [PySide6](https://doc.qt.io/qtforpython/)（Qt for Python） | LGPLv3 | 界面与窗口 |
+| [Pillow](https://python-pillow.org/) / [NumPy](https://numpy.org/) | HPND / BSD | 图像处理（NumPy 只在生成立绘的工具里用） |
+| 网络热梗与段子 | — | `lines.py` 里的热梗、Claude 自嘲和封号段子，来自公开网页文章和社区里的常见说法，可能不是最新的 |
+
+`skins/pixel/` 的像素图是 `make_pixel_skin.py` 画的；你自己放进 `skins/` 的图片版权归你，用别人的图请先取得作者同意。
 
 ## 打包（可选）
 
