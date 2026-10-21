@@ -307,7 +307,8 @@ class PetMenu(_Popup):
         lay.addWidget(Line())
         rows = QVBoxLayout()
         rows.setSpacing(0)
-        for text, key in (("跟随 Claude 启动和退出", "follow"), ("安静模式", "quiet"), ("精确额度（官方接口）", "accurate")):
+        for text, key in (("跟随 Claude 启动和退出", "follow"), ("安静模式", "quiet"), ("切走就隐藏", "hide_away"),
+                          ("精确额度（官方接口）", "accurate")):
             r = Row(text, switch=True)
             r.set_on(state.get(key))
             r.setFixedHeight(28)

@@ -126,6 +126,7 @@
 | `follow_claude` | Claude 关掉时她是否跟着退出 |
 | `click_opens_panel` | 点击弹出额度卡片 |
 | `work_with_claude` | 你在 Claude 里打字时她陪你“工作” |
+| `hide_when_away` | 切走就隐藏：你切到别的软件时她淡出隐藏，回到 Claude 再出现（右键菜单里的开关，默认关）；点托盘图标、点她自己的菜单/卡片不算切走 |
 | `usage_file` / `accurate_usage` | 额度文件路径 / 是否用官方接口 |
 | `theme` | 界面主题 |
 | `ai_enabled` / `ai_model` | 是否用 AI / 用哪个模型 |

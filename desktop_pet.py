@@ -17,7 +17,7 @@ import random
 import ctypes
 
 from PIL import Image
-from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QRectF, QPointF
+from PySide6.QtCore import Qt, QTimer, QPoint, QRect, QRectF, QPointF, QPropertyAnimation
 from PySide6.QtGui import (QImage, QPixmap, QPainter, QColor, QFont, QFontMetrics, QPainterPath,
                            QPen, QGuiApplication, QAction, QIcon, QPolygonF,
                            QTransform, QCursor)
@@ -60,6 +60,7 @@ DEFAULT_CONFIG = {
     "snoop_consent": False,          # 你确认过之后会自动变成 true
     "snoop_folders": [],             # 留空 = 桌面、文档、视频
     "sizes": {},                     # 每个形态各自的大小倍数（右键菜单的“大小”滑块 / Ctrl+滚轮，自动记住）
+    "hide_when_away": False,         # true=你切到别的软件时她自动隐藏，回到 Claude 再淡入出现
     "bust": {},                      # 每个形态是否用“半身”模式（高挑的全身立绘才有，脸放大约 1.8 倍）
 }
 
@@ -144,6 +145,10 @@ class Pet(QWidget):
         self.z_state = None
         self.next_z = 0.0
         self.force_top_until = 0.0
+        self.away_hidden = False         # “切走就隐藏”：当前是否被隐藏
+        self.away_since = None
+        self.next_away = 0.0
+        self.away_grace_until = 0.0
         self.docked = False         # 窗口上方没空间，改坐在窗口右下角
 
         now = time.monotonic()
@@ -443,6 +448,7 @@ class Pet(QWidget):
         elif self.mode == "fall":
             self._fall_step()
 
+        self._away_check(now)
         self._walk_step(now, dt)
         self._check_follow(now)
         self._update_zorder(now)
@@ -560,6 +566,62 @@ class Pet(QWidget):
             cw.set_topmost(me, True)
             self.z_state = "top"
 
+    # ---------- 切走就隐藏
+    # 点托盘/任务栏时焦点会短暂落到这些系统窗口上，不算“切走”
+    SYSTEM_CLASSES = ("Shell_TrayWnd", "Shell_SecondaryTrayWnd", "NotifyIconOverflowWindow",
+                      "TopLevelWindowForOverflowXamlIsland", "XamlExplorerHostIslandWindow",
+                      "ForegroundStaging", "MultitaskingViewFrame", "Windows.UI.Core.CoreWindow")
+
+    def _claude_active(self):
+        """前台窗口是 Claude、桌宠自己的窗口（卡片/菜单/输入框）或系统托盘/任务栏时算“没切走”"""
+        if not IS_WIN:
+            return True
+        fg = cw.foreground()
+        if not fg:
+            return True
+        pid, cls = cw.window_info(fg)
+        if pid == os.getpid() or cls in self.SYSTEM_CLASSES:
+            return True
+        name = self.finder._proc_name(pid) if self.finder else ""
+        return name in (self.finder.names if self.finder else ())
+
+    def _away_check(self, now):
+        if not self.cfg.get("hide_when_away", False):
+            if self.away_hidden:
+                self._set_away(False)
+            return
+        if now < self.next_away:
+            return
+        self.next_away = now + 0.25
+        if now < self.away_grace_until or self._claude_active():
+            self.away_since = None
+            if self.away_hidden:
+                self._set_away(False)
+            return
+        if self.away_since is None:
+            self.away_since = now
+        elif now - self.away_since > 1.2 and not self.away_hidden and not self.dragging:
+            self._set_away(True)
+
+    def _set_away(self, hide):
+        """淡出隐藏 / 淡入显示"""
+        if hide == self.away_hidden:
+            return
+        self.away_hidden = hide
+        if hide:
+            self.card.hide()
+            anim = QPropertyAnimation(self, b"windowOpacity", self)
+            anim.setDuration(220)
+            anim.setStartValue(self.windowOpacity())
+            anim.setEndValue(0.0)
+            anim.finished.connect(lambda: self.hide() if self.away_hidden else None)
+            self._away_anim = anim
+            anim.start()
+        else:
+            self.show()
+            self.paint_key = None
+            ui.fade_in(self, 220)
+
     def start_walk(self):
         """沿窗口上边缘（或任务栏上）散步到另一个位置，朝向跟着走；坐在右下角时没法散步，改跳个舞"""
         if self.mode == "perch" and self.claude and not self.docked:
@@ -609,6 +671,9 @@ class Pet(QWidget):
         """点托盘图标：把她提到最前，位置不在屏幕里就叫回来"""
         now = time.monotonic()
         self.force_top_until = now + 4.0
+        self.away_grace_until = now + 6.0
+        if self.away_hidden:
+            self._set_away(False)
         self.show()
         self.raise_()
         ag = self.screen_for(self.ax, self.ay).availableGeometry()
@@ -1229,7 +1294,8 @@ class Pet(QWidget):
         state = {"follow": bool(self.cfg.get("follow_claude", True)) and (not IS_WIN or cw.autostart_enabled()),
                  "quiet": self.quiet, "accurate": bool(self.cfg.get("accurate_usage", False)),
                  "size": getattr(self, "_size_target", self.form.scale),
-                 "tall": self.form.tall, "bust": self.form.bust}
+                 "tall": self.form.tall, "bust": self.form.bust,
+                 "hide_away": bool(self.cfg.get("hide_when_away", False))}
         self.card.hide()
         self.menu = ui_menu.PetMenu(self.thumbs(), self.form.id, state, self.badge)
         self.menu.triggered.connect(self.on_menu)
@@ -1259,6 +1325,11 @@ class Pet(QWidget):
             self.set_size(float(arg))
         elif key == "bust":
             self.toggle_bust(bool(arg))
+        elif key == "hide_away":
+            self.cfg["hide_when_away"] = bool(arg)
+            save_config(self.cfg)
+            self.away_grace_until = time.monotonic() + 3.0
+            self.say("好，你切走我就躲起来～" if arg else "好，我一直在屏幕上陪着", dur=3)
         elif key == "follow":
             self.toggle_follow(bool(arg))
         elif key == "quiet":

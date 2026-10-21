@@ -212,6 +212,15 @@ def is_above(a, b, limit=400):
     return False
 
 
+def window_info(hwnd):
+    """返回 (进程 id, 窗口类名)"""
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    buf = ctypes.create_unicode_buffer(128)
+    user32.GetClassNameW(hwnd, buf, 128)
+    return pid.value, buf.value
+
+
 def foreground():
     return _hwnd_int(user32.GetForegroundWindow())
 
