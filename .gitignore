@@ -1,0 +1,17 @@
+# 运行时生成 / 个人数据
+__pycache__/
+*.pyc
+pet.log
+follow.log
+ai.log
+ai_lines.json
+training.json
+stats.json
+out.txt
+err.txt
+config.json
+
+# 下载的立绘（get_skin.py 会下载；它们来自 Ancean/claude-musume，MIT）
+skin/*.png
+# 你自己放的御姐等立绘
+skins/yujie/*.png

@@ -1,0 +1,15 @@
+# 把这个文件改名成 lines.txt，里面的台词会追加到桌宠的台词库里
+# 一行一句，# 开头的行会被忽略
+# 用 [池子名] 切换要加到哪个池子，不写默认加到 [idle]
+# 可用的池子：idle 日常 / claude Claude 语录 / ban 封号额度段子 / meme 网络热梗
+#            click 被点 / poke 连点 / drag 被拎起 / land 落地 / wake 被叫醒 / bye 告别 ...（见 lines.py）
+今天也辛苦啦～
+要不要起来走两步？
+Claude 写得好认真啊
+
+[meme]
+# 在这里写你刷到的新梗，比如：
+这个梗是我自己加的
+
+[claude]
+# Claude 自己的名场面
